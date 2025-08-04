@@ -1,3 +1,4 @@
+@echo off
 rem  tetris.bat
 rem  https://tetris.fandom.com/wiki/SRS
 rem  https://tetris.fandom.com/wiki/Tetris_Guideline
@@ -5,9 +6,8 @@ rem  https://tetris.fandom.com/wiki/Tetris_Guideline
 
 
 rem  set up environment
-@echo off
 setlocal enabledelayedexpansion
-set "pressable=qpwasdijklzxcbnmv"
+set "pressable=qpwasdijklzxcbnmveu"
 
 
 if _%1==_ (
@@ -41,6 +41,7 @@ rem  Runs on cmd and listens for user I/O
   echo X or I or N or W : Clockwise
   echo Z or K or B or S : Counter-Clockwise
   echo C or M : Hold
+  echo U or E : Soft Drop
   echo V : Drop
   echo.
   set "keys="
@@ -94,16 +95,24 @@ for /l %%r in (-4,1,20) do (
 
 
 rem  Initialize stats
-set score=0
-set lines=0
+  set /a score=0
+  set /a lines=0
+
+rem Grab bag
+  set /a bag_idx=7
+  for /l %%i in (0,1,6) do (
+    set /a bag_%%i=0
+  )
 
 
 rem  define pieces
   set /a tet.active_row=-1
   set /a tet.active_col=4
   set /a tet.rot=0
-  call :rand tet.shape 0 6
-  call :rand tet.next 0 6
+  call :random_piece tet.shape
+  for /l %%n in (0,1,5) do (
+    call :random_piece tet.next_%%n
+  )
   set /a tet.held_piece=-1
   set /a tet.can_hold=1
 
@@ -684,11 +693,27 @@ rem  RIGHT
 goto :eof
 
 
-rem  HOLD <TODO>
+rem  HOLD
 :action_13
 :action_16
   if !paused!==0 (
-    echo HOLD
+    if !tet.can_hold!==1 (
+      call :remove_piece
+      set /a tet.active_row=-1
+      set /a tet.active_col=4
+      set /a tet.rot=0
+      if !tet.held_piece!==-1 (
+        set tet.held_piece=!tet.shape!
+        call :new_piece
+        set tet.can_hold=0
+        goto :eof
+      )
+      set b=!tet.held_piece!
+      set tet.held_piece=!tet.shape!
+      set tet.shape=!b!
+      call :add_piece ret
+      set tet.can_hold=0
+    )
   )
 goto :eof
 
@@ -701,6 +726,15 @@ rem  DROP
     if !ret!==0 (
       goto :drop
     )
+  )
+goto :eof
+
+
+rem  SOFT DROP
+:action_18
+:action_19
+  if !paused!==0 (
+    call :tick
   )
 goto :eof
 
@@ -774,7 +808,15 @@ rem  Add a new piece to game board
   set /a tet.active_row=-1
   set /a tet.active_col=4
   set /a tet.rot=0
-  call :rand tet.shape 0 6
+  set tet.shape=!tet.next_0!
+  for /l %%n in (0,1,4) do (
+    set /a nn=%%n+1
+    set "func=^!tet.next_!nn!^!"
+    for %%d in (!func!) do (
+      set tet.next_%%n=%%d
+    )
+  )
+  call :random_piece tet.next_5
   set /a tet.can_hold=1
   call :add_piece ret
   if !ret!==1 (
@@ -833,8 +875,53 @@ rem  Game tick
 goto :eof
 
 
+rem Makes a buffer for drawing extra pieces
+
+:set_buffer
+  for /l %%c in (0,1,3) do (
+    for /l %%r in (1,1,22) do (
+      set "buffer_%%r_%%c= "
+    )
+  )
+  if not !tet.held_piece!==-1 (
+    call :buf_help !tet.held_piece! 0 0 0
+  )
+  for /l %%n in (0,1,5) do (
+    set /a off=3+3*%%n
+    call :buf_help !tet.next_%%n! 0 !off! 0
+  )
+  call :consolidate_buffer
+  set "buffer_3=  ----"
+  if !tet.can_hold!==0 (
+    set "buffer_3=  ~~~~"
+  )
+goto :eof
+
+
+rem Per piece buffer
+:buf_help <piece> <rotation> <row offset> <col offset>
+  for /l %%a in (0,1,3) do (
+    set /a r=2+!tet.%~1_%~2_%%a_row!+%~3
+    set /a c=1+!tet.%~1_%~2_%%a_col!+%~4
+    set buffer_!r!_!c!=!tet.%~1_colour!
+  )
+goto :eof
+
+
+rem Makes each buffer row a string
+:consolidate_buffer
+  for /l %%r in (1,1,22) do (
+    set "buffer_%%r=  "
+    for /l %%c in (0,1,3) do (
+      set "buffer_%%r=!buffer_%%r!!buffer_%%r_%%c!"
+    )
+  )
+goto :eof
+
+
 rem  Print board
 :print
+  call :set_buffer
   set out=############^
 
 
@@ -853,7 +940,7 @@ rem  Print board
       )
       set "out=!out!!t!"
     )
-    set out=!out!#^
+    set out=!out!#!buffer_%%r!^
 
 
   )
@@ -898,10 +985,38 @@ rem  Try rotating the piece
 goto :eof
 
 
-rem  Get random int <TODO> do a grab-bag of all 7 pieces
+
 rem  Stored in %~1
 :rand <return> <min> <max>
-  set /a %~1=((%~3-%~2)*%RANDOM%)/32768+%~2
+  set /a %~1=(((%~3-%~2)*%RANDOM%)/32768+%~2)
+goto :eof
+
+
+rem Grab bag of seven pieces
+:random_piece <return>
+  if !bag_idx! GEQ 7 (
+    set bag_idx=0
+    for /l %%i in (0,1,6) do (
+      set not_grabbed_%%i=%%i
+    )
+    for /l %%i in (6,-1,0) do (
+      set ret=0
+      call :rand ret 0 %%i
+      set "func=^!not_grabbed_!ret!^!"
+      for %%d in (!func!) do (
+        set bag_%%i=%%d
+      )
+      for /l %%j in (!ret!,1,5) do (
+        set /a jj=%%j+1
+        set "func=^!not_grabbed_!jj!^!"
+        for %%d in (!func!) do (
+          set not_grabbed_%%j=%%d
+        )
+      )
+    )
+  )
+  set %~1=!bag_%bag_idx%!
+  set /a bag_idx+=1
 goto :eof
 
 
@@ -941,10 +1056,10 @@ endlocal
 
 
 rem  Todo:
-rem    Hold piece / swap
-rem    Show next piece
-rem    Grab-bag of next 7 pieces (instead of random int)
 rem    Levels
 rem      Scoring
 rem      Speeding up
 rem    Show drop location
+rem    Color
+rem      Needs to be faster
+rem      Write .exe
