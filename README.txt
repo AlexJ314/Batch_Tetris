@@ -3,7 +3,6 @@ Todo:
   Levels
     Scoring
     Speeding up
-  Show drop location
   Color
     Needs to be faster
     Write .exe to replace `findstr.exe`
