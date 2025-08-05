@@ -66,7 +66,7 @@ rem  Input loop
     exit /b
   )
   set /a id+=1
-  if !id! GEQ 100 (
+  if !id! GEQ 20 (
     set /a id=0
   )
   goto :inputLoop
@@ -603,7 +603,7 @@ rem  Read in ids and keys from file
         rem  find the id
         if !id!==!nextid! (
           set /a nextid+=1
-          if !nextid! GEQ 100 (
+          if !nextid! GEQ 20 (
             set /a nextid=0
           )
           if not _!key!==_ (
@@ -656,12 +656,12 @@ rem  LEFT
 :action_4
 :action_8
   if !paused!==0 (
-    call :remove_piece
+    call :remove_piece !tet.shape! !tet.rot! !tet.active_row! !tet.active_col!
     set /a tet.active_col+=-1
-    call :add_piece ret
+    call :add_piece ret !tet.shape! !tet.rot! !tet.active_row! !tet.active_col!
     if !ret!==1 (
       set /a tet.active_col+=1
-      call :add_piece ret
+      call :add_piece ret !tet.shape! !tet.rot! !tet.active_row! !tet.active_col!
     )
   )
 goto :eof
@@ -682,12 +682,12 @@ rem  RIGHT
 :action_6
 :action_10
   if !paused!==0 (
-    call :remove_piece
+    call :remove_piece !tet.shape! !tet.rot! !tet.active_row! !tet.active_col!
     set /a tet.active_col+=1
-    call :add_piece ret
+    call :add_piece ret !tet.shape! !tet.rot! !tet.active_row! !tet.active_col!
     if !ret!==1 (
       set /a tet.active_col+=-1
-      call :add_piece ret
+      call :add_piece ret !tet.shape! !tet.rot! !tet.active_row! !tet.active_col!
     )
   )
 goto :eof
@@ -698,7 +698,7 @@ rem  HOLD
 :action_16
   if !paused!==0 (
     if !tet.can_hold!==1 (
-      call :remove_piece
+      call :remove_piece !tet.shape! !tet.rot! !tet.active_row! !tet.active_col!
       set /a tet.active_row=-1
       set /a tet.active_col=4
       set /a tet.rot=0
@@ -711,7 +711,7 @@ rem  HOLD
       set b=!tet.held_piece!
       set tet.held_piece=!tet.shape!
       set tet.shape=!b!
-      call :add_piece ret
+      call :add_piece ret !tet.shape! !tet.rot! !tet.active_row! !tet.active_col!
       set tet.can_hold=0
     )
   )
@@ -751,28 +751,28 @@ rem  Result in %~1
 goto :eof
 
 
-rem  Remove current piece from game board
-:remove_piece
+rem  Remove piece from game board
+:remove_piece <piece> <rotation> <active row> <active col>
   for /l %%f in (0,1,3) do (
-    set /a r=!tet.active_row!+!tet.%tet.shape%_%tet.rot%_%%f_row!
-    set /a c=!tet.active_col!+!tet.%tet.shape%_%tet.rot%_%%f_col!
+    set /a r=%~3+!tet.%~1_%~2_%%f_row!
+    set /a c=%~4+!tet.%~1_%~2_%%f_col!
     set board.!r!_!c!=`
   )
 goto :eof
 
 
 rem  Add current piece to game board
-:add_piece <return value>
-  call :add_offset_piece %~1 0 0
+:add_piece <return value> <piece> <rotation> <active row> <active col> <custom color>
+  call :add_offset_piece %~1 0 0 %~2 %~3 %~4 %~5 %~6
 goto :eof
 
 
 rem  Add current piece to game board with offset
-:add_offset_piece <return value> <row> <col>
+:add_offset_piece <return value> <offset row> <offset col> <piece> <rotation> <active row> <active col> <custom color>
   set ret=0
   for /l %%a in (0,1,3) do (
-    set /a r=!tet.active_row!+!tet.%tet.shape%_%tet.rot%_%%a_row!+%~2
-    set /a c=!tet.active_col!+!tet.%tet.shape%_%tet.rot%_%%a_col!+%~3
+    set /a r=%~6+!tet.%~4_%~5_%%a_row!+%~2
+    set /a c=%~7+!tet.%~4_%~5_%%a_col!+%~3
     if !r! GTR 20 (
       set ret=1
     )
@@ -794,9 +794,14 @@ rem  Add current piece to game board with offset
   )
   if !ret!==0 (
     for /l %%a in (0,1,3) do (
-      set /a r=!tet.active_row!+!tet.%tet.shape%_%tet.rot%_%%a_row!+%~2
-      set /a c=!tet.active_col!+!tet.%tet.shape%_%tet.rot%_%%a_col!+%~3
-      set board.!r!_!c!=!tet.%tet.shape%_colour!
+      set /a r=%~6+!tet.%~4_%~5_%%a_row!+%~2
+      set /a c=%~7+!tet.%~4_%~5_%%a_col!+%~3
+      if _%~8==_ (
+        set board.!r!_!c!=!tet.%~4_colour!
+      )
+      if NOT _%~8==_ (
+        set board.!r!_!c!=%~8
+      )
     )
   )
   set %~1=!ret!
@@ -818,7 +823,7 @@ rem  Add a new piece to game board
   )
   call :random_piece tet.next_5
   set /a tet.can_hold=1
-  call :add_piece ret
+  call :add_piece ret !tet.shape! !tet.rot! !tet.active_row! !tet.active_col!
   if !ret!==1 (
     call :game_over
   )
@@ -861,12 +866,12 @@ rem  Game tick
   set /a lastTick=!now!
   if !paused!==0 (
     set buffer=1
-    call :remove_piece
+    call :remove_piece !tet.shape! !tet.rot! !tet.active_row! !tet.active_col!
     set /a tet.active_row+=1
-    call :add_piece ret
+    call :add_piece ret !tet.shape! !tet.rot! !tet.active_row! !tet.active_col!
     if !ret!==1 (
       set /a tet.active_row+=-1
-      call :add_piece ret
+      call :add_piece ret !tet.shape! !tet.rot! !tet.active_row! !tet.active_col!
       call :check_rows
       call :new_piece
       set ret=1
@@ -875,53 +880,81 @@ rem  Game tick
 goto :eof
 
 
-rem Makes a buffer for drawing extra pieces
-
-:set_buffer
+rem Makes a grid for drawing extra pieces
+:set_lookahead
   for /l %%c in (0,1,3) do (
     for /l %%r in (1,1,22) do (
-      set "buffer_%%r_%%c= "
+      set "lookahead_%%r_%%c= "
     )
   )
   if not !tet.held_piece!==-1 (
-    call :buf_help !tet.held_piece! 0 0 0
+    call :lookahead_help !tet.held_piece! 0 0 0
   )
   for /l %%n in (0,1,5) do (
     set /a off=3+3*%%n
-    call :buf_help !tet.next_%%n! 0 !off! 0
+    call :lookahead_help !tet.next_%%n! 0 !off! 0
   )
-  call :consolidate_buffer
-  set "buffer_3=  ----"
+  call :consolidate_lookahead
+  set "lookahead_3=  ----"
   if !tet.can_hold!==0 (
-    set "buffer_3=  ~~~~"
+    set "lookahead_3=  ~~~~"
   )
 goto :eof
 
 
-rem Per piece buffer
-:buf_help <piece> <rotation> <row offset> <col offset>
+rem Per piece grid
+:lookahead_help <piece> <rotation> <row offset> <col offset>
   for /l %%a in (0,1,3) do (
     set /a r=2+!tet.%~1_%~2_%%a_row!+%~3
     set /a c=1+!tet.%~1_%~2_%%a_col!+%~4
-    set buffer_!r!_!c!=!tet.%~1_colour!
+    set lookahead_!r!_!c!=!tet.%~1_colour!
   )
 goto :eof
 
 
-rem Makes each buffer row a string
-:consolidate_buffer
+rem Makes each lookahead grid row a string
+:consolidate_lookahead
   for /l %%r in (1,1,22) do (
-    set "buffer_%%r=  "
+    set "lookahead_%%r=  "
     for /l %%c in (0,1,3) do (
-      set "buffer_%%r=!buffer_%%r!!buffer_%%r_%%c!"
+      set "lookahead_%%r=!lookahead_%%r!!lookahead_%%r_%%c!"
     )
+  )
+goto :eof
+
+
+rem Forecast where the piece will be
+:forecast
+  set /a tet.forecast_row=!tet.active_row!
+  set /a tet.forecast_not_active=0
+  call :remove_piece !tet.shape! !tet.rot! !tet.active_row! !tet.active_col!
+  :forecast_loop
+  set /a tet.forecast_row+=1
+  call :add_piece ret !tet.shape! !tet.rot! !tet.forecast_row! !tet.active_col! *
+  if !ret!==0 (
+    call :remove_piece !tet.shape! !tet.rot! !tet.forecast_row! !tet.active_col!
+    goto :forecast_loop
+  )
+  if !ret!==1 (
+    set /a tet.forecast_row+=-1
+    call :add_piece ret !tet.shape! !tet.rot! !tet.active_row! !tet.active_col!
+    call :add_piece tet.forecast_not_active !tet.shape! !tet.rot! !tet.forecast_row! !tet.active_col! *
+  )
+goto :eof
+
+
+rem Removes forecast from board
+:unforecast
+  if !tet.forecast_not_active!==0 (
+    call :remove_piece !tet.shape! !tet.rot! !tet.forecast_row! !tet.active_col!
   )
 goto :eof
 
 
 rem  Print board
 :print
-  call :set_buffer
+  call :set_lookahead
+  call :forecast
   set out=############^
 
 
@@ -930,20 +963,22 @@ rem  Print board
     for /l %%c in (0,1,9) do (
       set "t=!board.%%r_%%c!"
       if !t!==` (
-        set /a tt=%%c / 2
-        set /a tt*=2
-        if !tt!==%%c (
-          set "t= "
-        ) else (
-          set "t=,"
-        )
+        set "t= "
+        rem set /a tt=%%c / 2
+        rem set /a tt*=2
+        rem if !tt!==%%c (
+        rem   set "t= "
+        rem ) else (
+        rem   set "t= \,"
+        rem )
       )
       set "out=!out!!t!"
     )
-    set out=!out!#!buffer_%%r!^
+    set out=!out!#!lookahead_%%r!^
 
 
   )
+  call :unforecast
   cls&echo !out!############
 goto :eof
 
@@ -951,7 +986,7 @@ goto :eof
 rem  Try rotating the piece
 :rotate <direction>
   if not !tet.shape!==3 (
-    call :remove_piece
+    call :remove_piece !tet.shape! !tet.rot! !tet.active_row! !tet.active_col!
     set lr=!tet.rot!
     set /a tet.rot+=%~1
     if !tet.rot! GTR 3 (
@@ -967,12 +1002,12 @@ rem  Try rotating the piece
     set try=0
     :retry
     for %%e in (!sh!_!lr!!tet.rot!_!try!) do (
-      call :add_offset_piece ret !kick.%%e_row! !kick.%%e_col!
+      call :add_offset_piece ret !kick.%%e_row! !kick.%%e_col! !tet.shape! !tet.rot! !tet.active_row! !tet.active_col!
       if !ret!==1 (
         set /a try+=1
         if !try! GTR 4 (
           set /a tet.rot=!lr!
-          call :add_piece ret
+          call :add_piece ret !tet.shape! !tet.rot! !tet.active_row! !tet.active_col!
         ) else (
           goto :retry
         )
@@ -988,14 +1023,14 @@ goto :eof
 
 rem  Stored in %~1
 :rand <return> <min> <max>
-  set /a %~1=(((%~3-%~2)*%RANDOM%)/32768+%~2)
+  set /a %~1=(((%~3+1-%~2)*%RANDOM%)/32768+%~2)
 goto :eof
 
 
 rem Grab bag of seven pieces
 :random_piece <return>
   if !bag_idx! GEQ 7 (
-    set bag_idx=0
+    set /a bag_idx=0
     for /l %%i in (0,1,6) do (
       set not_grabbed_%%i=%%i
     )
@@ -1059,7 +1094,6 @@ rem  Todo:
 rem    Levels
 rem      Scoring
 rem      Speeding up
-rem    Show drop location
 rem    Color
 rem      Needs to be faster
 rem      Write .exe
